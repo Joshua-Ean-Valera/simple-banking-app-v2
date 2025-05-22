@@ -115,10 +115,12 @@
                                         <span data-bs-toggle="tooltip" data-bs-placement="top" title="{{ transaction.sender.username }}">
                                             {{ transaction.sender.account_number }}
                                         </span>
-                                        {% if transaction.sender.is_admin %}
-                                        <span class="badge bg-warning text-dark">Admin</span>
-                                        {% elif transaction.sender.is_manager %}
+                                        {% if transaction.sender.is_manager %}
                                         <span class="badge bg-danger">Manager</span>
+                                        {% elif transaction.sender.is_admin %}
+                                        <span class="badge bg-warning text-dark">Admin</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">User</span>
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted">Unknown</span>
@@ -129,10 +131,12 @@
                                         <span data-bs-toggle="tooltip" data-bs-placement="top" title="{{ transaction.receiver.username }}">
                                             {{ transaction.receiver.account_number }}
                                         </span>
-                                        {% if transaction.receiver.is_admin %}
-                                        <span class="badge bg-warning text-dark">Admin</span>
-                                        {% elif transaction.receiver.is_manager %}
+                                        {% if transaction.receiver.is_manager %}
                                         <span class="badge bg-danger">Manager</span>
+                                        {% elif transaction.receiver.is_admin %}
+                                        <span class="badge bg-warning text-dark">Admin</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">User</span>
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted">Unknown</span>
@@ -171,4 +175,4 @@
         });
     });
 </script>
-{% endblock %} 
+{% endblock %}

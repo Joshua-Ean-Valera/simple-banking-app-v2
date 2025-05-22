@@ -115,47 +115,61 @@ class DepositForm(FlaskForm):
         return True
 
 class UserEditForm(FlaskForm):
-    email = StringField('Email', validators=[DataRequired(), Email()])
-    firstname = StringField('First Name', validators=[Optional()])
-    lastname = StringField('Last Name', validators=[Optional()])
-    
-    # Detailed address fields
-    address_line = StringField('Street Address', validators=[Optional()])
-    postal_code = StringField('Postal Code', validators=[Optional()])
-    
-    # Hidden fields to store codes
+    email = StringField('Email', validators=[
+        DataRequired(),
+        Email(),
+        Length(max=120)
+    ])
+    firstname = StringField('First Name', validators=[
+        Optional(),
+        Length(max=64),
+        Regexp(r"^[A-Za-z\s\-'.]*$", message="First name contains invalid characters.")
+    ])
+    lastname = StringField('Last Name', validators=[
+        Optional(),
+        Length(max=64),
+        Regexp(r"^[A-Za-z\s\-'.]*$", message="Last name contains invalid characters.")
+    ])
+    address_line = StringField('Street Address', validators=[
+        Optional(),
+        Length(max=256),
+        Regexp(r"^[A-Za-z0-9\s\-.,'#/]*$", message="Address contains invalid characters.")
+    ])
+    postal_code = StringField('Postal Code', validators=[
+        Optional(),
+        Length(max=10),
+        Regexp(r"^[A-Za-z0-9\-]*$", message="Postal code contains invalid characters.")
+    ])
     region_code = HiddenField('Region Code')
     province_code = HiddenField('Province Code')
     city_code = HiddenField('City Code')
     barangay_code = HiddenField('Barangay Code')
-    
-    # Display fields
     region_name = SelectField('Region', choices=[], validators=[Optional()])
     province_name = SelectField('Province', choices=[], validators=[Optional()])
     city_name = SelectField('City/Municipality', choices=[], validators=[Optional()])
     barangay_name = SelectField('Barangay', choices=[], validators=[Optional()])
-    
-    phone = StringField('Phone Number', validators=[Optional()])
-    
-    # Add status field for admins to change user status
+    phone = StringField('Phone Number', validators=[
+        Optional(),
+        Length(max=20),
+        Regexp(r"^[0-9+\-\s()]*$", message="Phone number contains invalid characters.")
+    ])
     status = SelectField('Account Status', 
                         choices=[('active', 'Active'), 
                                 ('deactivated', 'Deactivated'), 
                                 ('pending', 'Pending')],
                         validators=[DataRequired()])
-    
     submit = SubmitField('Update User')
-    
+
     def __init__(self, original_email, *args, **kwargs):
         super(UserEditForm, self).__init__(*args, **kwargs)
         self.original_email = original_email
-        
+
     def validate_email(self, email):
         if email.data != self.original_email:
             user = User.query.filter_by(email=email.data).first()
             if user is not None:
                 raise ValidationError('This email is already in use. Please use a different email address.')
-    
+
     def validate(self, extra_validators=None):
         return super(UserEditForm, self).validate()
 

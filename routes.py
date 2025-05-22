@@ -1,6 +1,7 @@
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.urls import url_parse
+from werkzeug.security import generate_password_hash
 from app import app, csrf
 from extensions import db, limiter
 from forms import LoginForm, RegistrationForm, TransferForm, ResetPasswordRequestForm, ResetPasswordForm, DepositForm, UserEditForm, ConfirmTransferForm
@@ -10,6 +11,8 @@ import os
 from functools import wraps
 import psgc_api
 import datetime
+import hmac
+from urllib.parse import urlparse, urljoin
 
 # Context processor to provide current year to all templates
 @app.context_processor
@@ -45,6 +48,11 @@ def send_password_reset_email(user):
     reset_url = url_for('reset_password', token=token, _external=True)
     flash(f'Password reset link (would be emailed): {reset_url}')
 
+def is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
 @app.route('/')
 @app.route('/index')
 @login_required
@@ -67,22 +75,15 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
-        
-        # Check if this is an old SHA-256 password hash (exactly 64 characters)
-        # SHA-256 hashes are 64 characters long, bcrypt hashes start with $2b$
-        if user and user.password_hash and len(user.password_hash) == 64 and not user.password_hash.startswith('$2b$'):
-            import hashlib
-            # Verify with old method
-            sha2_hash = hashlib.sha256(form.password.data.encode()).hexdigest()
-            if sha2_hash == user.password_hash:
-                # Upgrade to bcrypt
-                user.set_password(form.password.data)
-                db.session.commit()
-                # Continue with login
-            else:
-                flash('Invalid username or password')
-                return redirect(url_for('login'))
-        elif user is None or not user.check_password(form.password.data):
+        # Timing attack mitigation: always check password hash, even if user is None
+        password_ok = False
+        if user:
+            password_ok = user.check_password(form.password.data)
+        else:
+            # Dummy hash check to mitigate timing attacks
+            dummy_hash = generate_password_hash('dummy_password')
+            hmac.compare_digest(dummy_hash, generate_password_hash(form.password.data))
+        if not user or not password_ok:
             flash('Invalid username or password')
             return redirect(url_for('login'))
         
@@ -96,7 +97,7 @@ def login():
             
         login_user(user)
         next_page = request.args.get('next')
-        if not next_page or url_parse(next_page).netloc != '':
+        if not next_page or not is_safe_url(next_page):
             next_page = url_for('index')
         return redirect(next_page)
     return render_template('login.html', title='Sign In', form=form)
@@ -577,6 +578,7 @@ def edit_user(user_id):
 @login_required
 @admin_required
 @limiter.limit("30 per minute")
+@csrf.exempt
 def get_provinces(region_code):
     provinces = psgc_api.get_provinces(region_code)
     return jsonify([{'code': p['code'], 'name': p['name']} for p in provinces])
@@ -585,6 +587,7 @@ def get_provinces(region_code):
 @login_required
 @admin_required
 @limiter.limit("30 per minute")
+@csrf.exempt
 def get_cities_and_municipalities(province_code):
     # Check if it's a city or municipality
     cities = psgc_api.get_cities(province_code)
@@ -606,6 +609,7 @@ def get_cities_and_municipalities(province_code):
 @login_required
 @admin_required
 @limiter.limit("30 per minute")
+@csrf.exempt
 def get_barangays(city_code):
     # Check if it's a city or municipality
     city_info = psgc_api.get_city_by_code(city_code)

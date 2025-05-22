@@ -110,10 +110,12 @@
                                 <td>
                                     {% if transaction.sender %}
                                         {{ transaction.sender.username }}
-                                        {% if transaction.sender.is_admin %}
-                                        <span class="badge bg-warning text-dark">Admin</span>
-                                        {% elif transaction.sender.is_manager %}
+                                        {% if transaction.sender.is_manager %}
                                         <span class="badge bg-danger">Manager</span>
+                                        {% elif transaction.sender.is_admin %}
+                                        <span class="badge bg-warning text-dark">Admin</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">User</span>
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted">Unknown</span>
@@ -122,10 +124,12 @@
                                 <td>
                                     {% if transaction.receiver %}
                                         {{ transaction.receiver.username }}
-                                        {% if transaction.receiver.is_admin %}
-                                        <span class="badge bg-warning text-dark">Admin</span>
-                                        {% elif transaction.receiver.is_manager %}
+                                        {% if transaction.receiver.is_manager %}
                                         <span class="badge bg-danger">Manager</span>
+                                        {% elif transaction.receiver.is_admin %}
+                                        <span class="badge bg-warning text-dark">Admin</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">User</span>
                                         {% endif %}
                                     {% else %}
                                         <span class="text-muted">Unknown</span>
@@ -192,4 +196,4 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}

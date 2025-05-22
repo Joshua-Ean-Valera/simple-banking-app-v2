@@ -130,12 +130,8 @@
                             <span class="badge bg-danger account-badge">Manager</span>
                             {% elif current_user.is_admin %}
                             <span class="badge bg-warning text-dark account-badge">Admin</span>
-                            {% elif current_user.status == 'active' %}
-                            <span class="badge bg-success account-badge">Active</span>
-                            {% elif current_user.status == 'deactivated' %}
-                            <span class="badge bg-danger account-badge">Deactivated</span>
                             {% else %}
-                            <span class="badge bg-secondary account-badge">Pending</span>
+                            <span class="badge bg-secondary account-badge">User</span>
                             {% endif %}
                         </span>
                     </li>
@@ -228,4 +224,4 @@
     
     {% block scripts %}{% endblock %}
 </body>
-</html> 
+</html>
