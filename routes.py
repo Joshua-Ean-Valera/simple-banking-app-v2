@@ -907,4 +907,4 @@ def manager_transfers():
     return render_template('manager/transfers.html', 
                          title='Transfer Transactions', 
                          transactions=transactions,
-                         users=users) 
+                         users=users)

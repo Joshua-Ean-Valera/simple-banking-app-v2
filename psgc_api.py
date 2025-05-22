@@ -119,4 +119,4 @@ def get_barangay_by_code(code):
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
-    return None 
+    return None

@@ -398,4 +398,4 @@ if __name__ == "__main__":
         print("Make sure MySQL server is running and credentials are correct in .env file.")
         # Exit with error code
         import sys
-        sys.exit(1) 
+        sys.exit(1)

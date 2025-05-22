@@ -11,4 +11,4 @@ from app import app as application
 
 # This allows the application to be run directly
 if __name__ == '__main__':
-    application.run() 
+    application.run()

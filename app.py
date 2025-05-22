@@ -27,6 +27,11 @@ def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(16)
 
+    # Enforce secure session cookies
+    app.config['SESSION_COOKIE_SECURE'] = True  # Only send cookies over HTTPS
+    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JS access to cookies
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Mitigate CSRF
+
     # CSRF Protection
     csrf.init_app(app)
 
@@ -58,7 +63,27 @@ def create_app():
     login_manager.init_app(app)
     bcrypt.init_app(app)
     limiter.init_app(app)
-    
+
+    # Enforce HTTPS and set security headers
+    @app.before_request
+    def before_request():
+        # Redirect HTTP to HTTPS
+        if not request.is_secure and app.env != "development":
+            url = request.url.replace("http://", "https://", 1)
+            return redirect(url, code=301)
+
+    @app.after_request
+    def set_security_headers(response):
+        # HSTS header
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+        # Clickjacking protection
+        response.headers['X-Frame-Options'] = 'DENY'
+        # XSS protection
+        response.headers['X-XSS-Protection'] = '1; mode=block'
+        # Content type sniffing protection
+        response.headers['X-Content-Type-Options'] = 'nosniff'
+        return response
+
     # Register custom error handler for rate limiting
     @app.errorhandler(RateLimitExceeded)
     def handle_rate_limit_exceeded(e):
@@ -113,4 +138,9 @@ if __name__ == '__main__':
     
     with app.app_context():
         db.create_all()
-    app.run(debug=True) 
+    app.run(debug=True)
+
+# NOTE: Ensure password policy is enforced in registration logic (e.g., minimum length, complexity).
+# NOTE: Ensure input validation and parameterized queries in routes/models to prevent SQL injection.
+# NOTE: Ensure all sensitive data (passwords, secrets) are stored hashed/encrypted and not logged.
+# NOTE: Use tools like 'pip-audit' or 'safety' to check for known vulnerabilities in dependencies.
