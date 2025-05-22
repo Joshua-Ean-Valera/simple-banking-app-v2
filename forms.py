@@ -6,6 +6,7 @@ from models import User
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
+    mfa_code = StringField('MFA Code', validators=[Optional(), Length(min=6, max=6, message="Enter 6-digit code")])
     submit = SubmitField('Login')
 
     def validate(self, extra_validators=None):

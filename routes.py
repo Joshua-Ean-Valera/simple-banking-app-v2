@@ -5,8 +5,9 @@ from werkzeug.security import generate_password_hash
 from app import app, csrf
 from extensions import db, limiter
 from forms import LoginForm, RegistrationForm, TransferForm, ResetPasswordRequestForm, ResetPasswordForm, DepositForm, UserEditForm, ConfirmTransferForm
-from models import User, Transaction
-from itsdangerous import URLSafeTimedSerializer, SignatureExpired
+from models import User, Transaction, AuditLog
+import pyotp
+from datetime import datetime, timedelta
 import os
 from functools import wraps
 import psgc_api
@@ -53,6 +54,11 @@ def is_safe_url(target):
     test_url = urlparse(urljoin(request.host_url, target))
     return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
 
+def log_audit(user_id, action, details=""):
+    log = AuditLog(user_id=user_id, action=action, details=details)
+    db.session.add(log)
+    db.session.commit()
+
 @app.route('/')
 @app.route('/index')
 @login_required
@@ -75,27 +81,43 @@ def login():
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
+        now = datetime.utcnow()
+        # Account lockout check
+        if user and user.account_locked_until and user.account_locked_until > now:
+            flash('Account is locked due to too many failed login attempts. Try again later.')
+            log_audit(user.id, "login_locked", "Attempted login while account locked")
+            return redirect(url_for('login'))
         # Timing attack mitigation: always check password hash, even if user is None
         password_ok = False
         if user:
             password_ok = user.check_password(form.password.data)
         else:
-            # Dummy hash check to mitigate timing attacks
             dummy_hash = generate_password_hash('dummy_password')
             hmac.compare_digest(dummy_hash, generate_password_hash(form.password.data))
-        if not user or not password_ok:
-            flash('Invalid username or password')
+        # MFA check
+        mfa_ok = True
+        if user and user.mfa_secret:
+            mfa_ok = False
+            if form.mfa_code.data:
+                totp = pyotp.TOTP(user.mfa_secret)
+                if totp.verify(form.mfa_code.data, valid_window=1):
+                    mfa_ok = True
+        if not user or not password_ok or not mfa_ok:
+            # Increment failed login attempts
+            if user:
+                user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+                if user.failed_login_attempts >= 5:
+                    user.account_locked_until = now + timedelta(minutes=15)
+                    log_audit(user.id, "account_locked", "Too many failed login attempts")
+                db.session.commit()
+                log_audit(user.id if user else None, "login_failed", "Invalid credentials or MFA")
+            flash('Invalid username, password, or MFA code')
             return redirect(url_for('login'))
-        
-        # Check if user account is active (unless they're an admin or manager)
-        if user.status != 'active' and not user.is_admin and not user.is_manager:
-            if user.status == 'pending':
-                flash('Your account is awaiting approval from an administrator.')
-            else:  # deactivated
-                flash('Your account has been deactivated. Please contact an administrator.')
-            return redirect(url_for('login'))
-            
-        login_user(user)
+        # Reset failed attempts on successful login
+        user.failed_login_attempts = 0
+        user.account_locked_until = None
+        db.session.commit()
+        log_audit(user.id, "login_success", "User logged in successfully")
         next_page = request.args.get('next')
         if not next_page or not is_safe_url(next_page):
             next_page = url_for('index')
@@ -288,6 +310,7 @@ def activate_user(user_id):
         
     user.status = 'active'
     db.session.commit()
+    log_audit(current_user.id, "activate_user", f"Activated user {user.username}")
     flash(f'Account {user.username} has been activated.')
     return redirect(url_for('admin_dashboard'))
 
@@ -304,6 +327,7 @@ def deactivate_user(user_id):
         
     user.status = 'deactivated'
     db.session.commit()
+    log_audit(current_user.id, "deactivate_user", f"Deactivated user {user.username}")
     flash(f'Account {user.username} has been deactivated.')
     return redirect(url_for('admin_dashboard'))
 
@@ -318,6 +342,7 @@ def create_account():
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
+        log_audit(current_user.id, "create_account", f"Created user {user.username}")
         flash('User account has been created.')
         return redirect(url_for('admin_dashboard'))
     return render_template('admin/create_account.html', title='Create User Account', form=form)

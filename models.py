@@ -4,10 +4,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 import random
 import string
+from datetime import datetime
 
 def generate_account_number():
     """Generate a random 10-digit account number"""
     return ''.join(random.choices(string.digits, k=10))
+
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    action = db.Column(db.String(128))
+    details = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -36,6 +44,9 @@ class User(UserMixin, db.Model):
     date_registered = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     transactions_sent = db.relationship('Transaction', foreign_keys='Transaction.sender_id', backref='sender', lazy='dynamic')
     transactions_received = db.relationship('Transaction', foreign_keys='Transaction.receiver_id', backref='receiver', lazy='dynamic')
+    failed_login_attempts = db.Column(db.Integer, default=0)
+    account_locked_until = db.Column(db.DateTime, nullable=True)
+    mfa_secret = db.Column(db.String(32), nullable=True)
     
     @property
     def full_address(self):
@@ -155,4 +166,4 @@ class Transaction(db.Model):
     details = db.Column(db.Text, nullable=True)  # For storing additional details (e.g., fields modified)
     
     def __repr__(self):
-        return f'<Transaction {self.id} - {self.amount}>' 
+        return f'<Transaction {self.id} - {self.amount}>'
