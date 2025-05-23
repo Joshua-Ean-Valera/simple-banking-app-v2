@@ -95,25 +95,6 @@ def login():
         else:
             dummy_hash = generate_password_hash('dummy_password')
             hmac.compare_digest(dummy_hash, generate_password_hash(form.password.data))
-        # MFA check
-        mfa_ok = True
-        if user and user.mfa_secret:
-            mfa_ok = False
-            if form.mfa_code.data:
-                totp = pyotp.TOTP(user.mfa_secret)
-                if totp.verify(form.mfa_code.data, valid_window=1):
-                    mfa_ok = True
-        if not user or not password_ok or not mfa_ok:
-            # Increment failed login attempts
-            if user:
-                user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-                if user.failed_login_attempts >= 5:
-                    user.account_locked_until = now + timedelta(minutes=15)
-                    log_audit(user.id, "account_locked", "Too many failed login attempts")
-                db.session.commit()
-                log_audit(user.id if user else None, "login_failed", "Invalid credentials or MFA")
-            flash('Invalid username, password, or MFA code')
-            return redirect(url_for('login'))
         # Reset failed attempts on successful login
         user.failed_login_attempts = 0
         user.account_locked_until = None

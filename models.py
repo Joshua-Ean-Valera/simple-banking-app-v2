@@ -46,7 +46,6 @@ class User(UserMixin, db.Model):
     transactions_received = db.relationship('Transaction', foreign_keys='Transaction.receiver_id', backref='receiver', lazy='dynamic')
     failed_login_attempts = db.Column(db.Integer, default=0)
     account_locked_until = db.Column(db.DateTime, nullable=True)
-    mfa_secret = db.Column(db.String(32), nullable=True)
     
     @property
     def full_address(self):
