@@ -6,7 +6,8 @@ from werkzeug.security import generate_password_hash
 import datetime
 import psgc_api
 import traceback  # For detailed error tracing
-from flask import Markup
+from markupsafe import Markup
+
 
 
 # Load environment variables
