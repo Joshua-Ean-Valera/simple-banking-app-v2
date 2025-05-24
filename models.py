@@ -4,18 +4,10 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import datetime
 import random
 import string
-from datetime import datetime
 
 def generate_account_number():
     """Generate a random 10-digit account number"""
     return ''.join(random.choices(string.digits, k=10))
-
-class AuditLog(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
-    action = db.Column(db.String(128))
-    details = db.Column(db.Text)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -42,10 +34,20 @@ class User(UserMixin, db.Model):
     is_admin = db.Column(db.Boolean, default=False)  # Admin status
     is_manager = db.Column(db.Boolean, default=False)  # Manager status (can manage admins)
     date_registered = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    is_verified = db.Column(db.Boolean, default=False)
     transactions_sent = db.relationship('Transaction', foreign_keys='Transaction.sender_id', backref='sender', lazy='dynamic')
     transactions_received = db.relationship('Transaction', foreign_keys='Transaction.receiver_id', backref='receiver', lazy='dynamic')
-    failed_login_attempts = db.Column(db.Integer, default=0)
-    account_locked_until = db.Column(db.DateTime, nullable=True)
+    # Profile fields
+    first_name = db.Column(db.String(100))
+    last_name = db.Column(db.String(100))
+    phone_number = db.Column(db.String(20))
+    address = db.Column(db.String(200))
+    date_of_birth = db.Column(db.Date)
+    profile_complete = db.Column(db.Boolean, default=False)
+    
+    # PIN security fields
+    pin_hash = db.Column(db.String(128))
+    pin_set = db.Column(db.Boolean, default=False)
     
     @property
     def full_address(self):
@@ -154,6 +156,17 @@ class User(UserMixin, db.Model):
             
         # Regular users can't manage anyone
         return False
+
+    def set_pin(self, pin):
+        """Set user's 6-digit PIN"""
+        self.pin_hash = bcrypt.generate_password_hash(pin).decode('utf-8')
+        self.pin_set = True
+        
+    def check_pin(self, pin):
+        """Verify the user's PIN"""
+        if not self.pin_hash:
+            return False
+        return bcrypt.check_password_hash(self.pin_hash, pin)
 
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)

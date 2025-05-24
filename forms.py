@@ -1,11 +1,26 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, SubmitField, FloatField, RadioField, SelectField, HiddenField
-from wtforms.validators import DataRequired, Email, EqualTo, ValidationError, NumberRange, Optional, Length, Regexp
+from wtforms import StringField, PasswordField, SubmitField, BooleanField, DecimalField, RadioField, TextAreaField, DateField, FloatField, HiddenField, SelectField
+from wtforms.validators import DataRequired, Email, EqualTo, Length, ValidationError, Regexp, NumberRange, Optional
 from models import User
+import re
+
+def strong_password(form, field):
+    password = field.data
+    if len(password) < 8:
+        raise ValidationError('Password must be at least 8 characters long.')
+    if not re.search(r'[A-Z]', password):
+        raise ValidationError('Password must contain at least one uppercase letter.')
+    if not re.search(r'[a-z]', password):
+        raise ValidationError('Password must contain at least one lowercase letter.')
+    if not re.search(r'\d', password):
+        raise ValidationError('Password must contain at least one digit.')
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        raise ValidationError('Password must contain at least one special character.')
 
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
+    remember = BooleanField('Keep me logged in')
     submit = SubmitField('Login')
 
     def validate(self, extra_validators=None):
@@ -16,11 +31,10 @@ class RegistrationForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email()])
     password = PasswordField('Password', validators=[
         DataRequired(),
-        Length(min=8, message="Password must be at least 8 characters."),
-        Regexp(r'^(?=.*[A-Za-z])(?=.*\d).+$', message="Password must contain at least one letter and one number.")
+        strong_password,
+        EqualTo('confirm', message='Passwords must match')
     ])
-    password2 = PasswordField(
-        'Repeat Password', validators=[DataRequired(), EqualTo('password')])
+    confirm = PasswordField('Confirm Password')  # <-- Change label here
     submit = SubmitField('Register')
 
     def validate_username(self, username):
@@ -85,11 +99,7 @@ class ResetPasswordRequestForm(FlaskForm):
         return super(ResetPasswordRequestForm, self).validate()
 
 class ResetPasswordForm(FlaskForm):
-    password = PasswordField('New Password', validators=[
-        DataRequired(),
-        Length(min=8, message="Password must be at least 8 characters."),
-        Regexp(r'^(?=.*[A-Za-z])(?=.*\d).+$', message="Password must contain at least one letter and one number.")
-    ])
+    password = PasswordField('New Password', validators=[DataRequired(), strong_password])
     password2 = PasswordField(
         'Repeat Password', validators=[DataRequired(), EqualTo('password')])
     submit = SubmitField('Reset Password')
@@ -115,61 +125,47 @@ class DepositForm(FlaskForm):
         return True
 
 class UserEditForm(FlaskForm):
-    email = StringField('Email', validators=[
-        DataRequired(),
-        Email(),
-        Length(max=120)
-    ])
-    firstname = StringField('First Name', validators=[
-        Optional(),
-        Length(max=64),
-        Regexp(r"^[A-Za-z\s\-'.]*$", message="First name contains invalid characters.")
-    ])
-    lastname = StringField('Last Name', validators=[
-        Optional(),
-        Length(max=64),
-        Regexp(r"^[A-Za-z\s\-'.]*$", message="Last name contains invalid characters.")
-    ])
-    address_line = StringField('Street Address', validators=[
-        Optional(),
-        Length(max=256),
-        Regexp(r"^[A-Za-z0-9\s\-.,'#/]*$", message="Address contains invalid characters.")
-    ])
-    postal_code = StringField('Postal Code', validators=[
-        Optional(),
-        Length(max=10),
-        Regexp(r"^[A-Za-z0-9\-]*$", message="Postal code contains invalid characters.")
-    ])
+    email = StringField('Email', validators=[DataRequired(), Email()])
+    firstname = StringField('First Name', validators=[Optional()])
+    lastname = StringField('Last Name', validators=[Optional()])
+    
+    # Detailed address fields
+    address_line = StringField('Street Address', validators=[Optional()])
+    postal_code = StringField('Postal Code', validators=[Optional()])
+    
+    # Hidden fields to store codes
     region_code = HiddenField('Region Code')
     province_code = HiddenField('Province Code')
     city_code = HiddenField('City Code')
     barangay_code = HiddenField('Barangay Code')
+    
+    # Display fields
     region_name = SelectField('Region', choices=[], validators=[Optional()])
     province_name = SelectField('Province', choices=[], validators=[Optional()])
     city_name = SelectField('City/Municipality', choices=[], validators=[Optional()])
     barangay_name = SelectField('Barangay', choices=[], validators=[Optional()])
-    phone = StringField('Phone Number', validators=[
-        Optional(),
-        Length(max=20),
-        Regexp(r"^[0-9+\-\s()]*$", message="Phone number contains invalid characters.")
-    ])
+    
+    phone = StringField('Phone Number', validators=[Optional()])
+    
+    # Add status field for admins to change user status
     status = SelectField('Account Status', 
                         choices=[('active', 'Active'), 
                                 ('deactivated', 'Deactivated'), 
                                 ('pending', 'Pending')],
                         validators=[DataRequired()])
+    
     submit = SubmitField('Update User')
-
+    
     def __init__(self, original_email, *args, **kwargs):
         super(UserEditForm, self).__init__(*args, **kwargs)
         self.original_email = original_email
-
+        
     def validate_email(self, email):
         if email.data != self.original_email:
             user = User.query.filter_by(email=email.data).first()
             if user is not None:
                 raise ValidationError('This email is already in use. Please use a different email address.')
-
+    
     def validate(self, extra_validators=None):
         return super(UserEditForm, self).validate()
 
@@ -179,3 +175,47 @@ class ConfirmTransferForm(FlaskForm):
     amount = HiddenField('Amount')
     transfer_type = HiddenField('Transfer Type')
     submit = SubmitField('Confirm Transfer')
+
+class ProfileForm(FlaskForm):
+    first_name = StringField('First Name', validators=[DataRequired(), Length(max=100)])
+    last_name = StringField('Last Name', validators=[DataRequired(), Length(max=100)])
+    phone_number = StringField('Phone Number', validators=[DataRequired(), Length(max=20)])
+    address = TextAreaField('Address', validators=[DataRequired(), Length(max=200)])
+    date_of_birth = DateField('Date of Birth', validators=[DataRequired()], format='%Y-%m-%d')
+    submit = SubmitField('Complete Profile')
+
+class SetupPINForm(FlaskForm):
+    pin = PasswordField('6-Digit PIN', validators=[
+        DataRequired(),
+        Length(min=6, max=6, message="PIN must be exactly 6 digits"),
+        Regexp('^[0-9]*$', message="PIN must contain only digits")
+    ])
+    confirm_pin = PasswordField('Confirm PIN', validators=[
+        DataRequired(),
+        EqualTo('pin', message='PINs must match')
+    ])
+    submit = SubmitField('Set PIN')
+
+class VerifyPINForm(FlaskForm):
+    pin = PasswordField('Enter your 6-Digit PIN', validators=[
+        DataRequired(),
+        Length(min=6, max=6, message="PIN must be exactly 6 digits"),
+        Regexp('^[0-9]*$', message="PIN must contain only digits")
+    ])
+    submit = SubmitField('Verify')
+
+class ChangePINForm(FlaskForm):
+    current_pin = PasswordField('Current PIN', validators=[
+        DataRequired(),
+        Length(min=6, max=6, message="PIN must be exactly 6 digits")
+    ])
+    new_pin = PasswordField('New 6-Digit PIN', validators=[
+        DataRequired(),
+        Length(min=6, max=6, message="PIN must be exactly 6 digits"),
+        Regexp('^[0-9]*$', message="PIN must contain only digits")
+    ])
+    confirm_new_pin = PasswordField('Confirm New PIN', validators=[
+        DataRequired(),
+        EqualTo('new_pin', message='PINs must match')
+    ])
+    submit = SubmitField('Change PIN')
